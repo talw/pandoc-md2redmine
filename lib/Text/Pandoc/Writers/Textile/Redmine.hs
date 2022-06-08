@@ -154,11 +154,16 @@ blockToTextile opts (Header level (_, _, keyvals) inlines) = do
   let prefix = "h" <> tshow level <> styles <> lang <> ". "
   return $ prefix <> contents <> "\n"
 blockToTextile _ (CodeBlock (_, classes, _) str) =
-  return . T.unlines $
-    [ "<pre>" <> codeOpen
-    , str
-    , codeClose <> "</pre>"
-    ]
+  return
+    -- Remove the trailing newline added by `unlines`
+    -- Otherwise, in the case of a block in side a list, you will have an empty line after the code block which causes textile
+    -- to think that what follows is separated from inside the list is not a part of the list
+    . trim
+    . T.unlines $
+      [ "<pre>" <> codeOpen
+      , str
+      , codeClose <> "</pre>"
+      ]
   where
     (codeOpen, codeClose)
       | T.null (T.unwords classes) = ("", "")
