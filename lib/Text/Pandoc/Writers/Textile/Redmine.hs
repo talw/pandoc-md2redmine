@@ -23,10 +23,10 @@ import Text.Pandoc.Writers.Shared
 import Text.Pandoc.XML (escapeStringForXML)
 
 data WriterState = WriterState
-  { stNotes :: [Text] -- Footnotes
-  , stListLevel :: [Char] -- String at beginning of list items, e.g. "**"
-  , stStartNum :: Maybe Int -- Start number if first list item
-  , stUseTags :: Bool -- True if we should use HTML tags because we're in a complex list
+  { stNotes :: [Text], -- Footnotes
+    stListLevel :: [Char], -- String at beginning of list items, e.g. "**"
+    stStartNum :: Maybe Int, -- Start number if first list item
+    stUseTags :: Bool -- True if we should use HTML tags because we're in a complex list
   }
 
 type TW = StateT WriterState
@@ -37,10 +37,10 @@ writeTextile opts document =
   evalStateT
     (pandocToTextile opts document)
     WriterState
-      { stNotes = []
-      , stListLevel = []
-      , stStartNum = Nothing
-      , stUseTags = False
+      { stNotes = [],
+        stListLevel = [],
+        stStartNum = Nothing,
+        stUseTags = False
       }
 
 -- | Return Textile representation of document.
@@ -117,9 +117,9 @@ blockToTextile opts (Div (_, ["collapse"], keyvals) bs) = do
         (Just open, Just close) -> "(" <> open <> "," <> close <> ")"
   -- return . T.intercalate "\n" $
   return . T.unlines $
-    [ "{{collapse" <> toggleMessage
-    , contents
-    , "}}"
+    [ "{{collapse" <> toggleMessage,
+      contents,
+      "}}"
     ]
 blockToTextile opts (Div attr bs) = do
   let startTag = render Nothing $ tagWithAttrs "div" attr
@@ -153,16 +153,20 @@ blockToTextile opts (Header level (_, _, keyvals) inlines) = do
   let styles = maybe "" (\x -> "{" <> x <> "}") $ lookup "style" keyvals
   let prefix = "h" <> tshow level <> styles <> lang <> ". "
   return $ prefix <> contents <> "\n"
-blockToTextile _ (CodeBlock (_, classes, _) str) =
+blockToTextile _ (CodeBlock (_, classes, _) str) = do
+  listLevel <- gets stListLevel
+  let maybeTrim = if null listLevel then id else trim
   return
     -- Remove the trailing newline added by `unlines`
-    -- Otherwise, in the case of a block in side a list, you will have an empty line after the code block which causes textile
-    -- to think that what follows is separated from inside the list is not a part of the list
-    . trim
-    . T.unlines $
-      [ "<pre>" <> codeOpen
-      , str
-      , codeClose <> "</pre>"
+    -- Otherwise, in the case of a block inside a list,
+    -- you will have an empty line after the code block which causes textile
+    -- to think that what follows is separated from inside the list is not a
+    -- part of the list
+    . maybeTrim
+    . T.unlines
+    $ [ "<pre>" <> codeOpen,
+        str,
+        codeClose <> "</pre>"
       ]
   where
     (codeOpen, codeClose)
@@ -227,8 +231,8 @@ blockToTextile opts (BulletList items) = do
 blockToTextile opts (OrderedList (start, _, _) items) = do
   modify $ \s ->
     s
-      { stListLevel = stListLevel s <> "#"
-      , stStartNum =
+      { stListLevel = stListLevel s <> "#",
+        stStartNum =
           if start > 1
             then Just start
             else Nothing
@@ -237,8 +241,8 @@ blockToTextile opts (OrderedList (start, _, _) items) = do
   contents <- mapM (listItemToTextile opts) items
   modify $ \s ->
     s
-      { stListLevel = init (stListLevel s)
-      , stStartNum = Nothing
+      { stListLevel = init (stListLevel s),
+        stStartNum = Nothing
       }
   return $ vcat contents <> (if level > 1 then "" else "\n")
 blockToTextile opts (DefinitionList items) = do
